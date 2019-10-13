@@ -1,20 +1,32 @@
 #!/usr/bin/env python3
 
-import matplotlib.pyplot as plt 
-import pandas as pd 
-import numpy as np 
+from matplotlib.animation import FuncAnimation
+import matplotlib.pyplot as plt
+from drawnow import drawnow
+import pandas as pd
+import numpy as np
 import gps
 import sys
 
-def main():
+while(True):
+    #
+    try:
+        coordinate = AcquireData()
+    except:
+        coordinate = [0,0]
+    #
+lon = coordinate[0]
+lat = coordinate[1]
+
+def Plotter():
     #
     BoundaryBox = ((117.0460,116.9426,46.7071,46.7493))
     #
-    city = plt.imread("C:\\Users\\robert.gaines\\Desktop\\WarDriver\\moscow.png")
+    city = plt.imread("/home/amnesiac/Desktop/War-Driver/moscow.png")
     #
     figure,axis = plt.subplots(figsize=(8,7))
     #
-    axis.scatter(dataSet.longitude,dataSet.latitude,zorder=1,alpha=.95,c='r',s=10)
+    axis.scatter(float(abs(lon)),float(lat),zorder=1,alpha=.95,c='r',s=10)
     #
     axis.set_title("Wireless AP's")
     #
@@ -23,10 +35,8 @@ def main():
     axis.set_ylim(BoundaryBox[2],BoundaryBox[3])
     #
     axis.imshow(city,zorder=0,extent=BoundaryBox,aspect='equal')
-    #
-    plt.show()
 
-def main():
+def AcquireData():
     #
     session = gps.gps("localhost", "2947")
     #
@@ -50,6 +60,10 @@ def main():
 Time: %s | Latitude: %s | Longitude: %s | Elevation: %s | Velocity: %s
                     """ % (zuluTime,latitude,longitude,elevation,speed))
                     #
+                    fix = [float(longitude),float(latitude)]
+                    #
+                    return fix
+                    #
                 except:
                     #
                     pass
@@ -67,6 +81,12 @@ Time: %s | Latitude: %s | Longitude: %s | Elevation: %s | Velocity: %s
             session = None
             #
             print("[!] Session terminated [!]")
+
+def main():
+    #
+    plt.ion() ; figure = plt.figure()
+    #
+    drawnow(Plotter)
 
 if(__name__ == '__main__'):
     #

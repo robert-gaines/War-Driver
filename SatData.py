@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from matplotlib.animation import FuncAnimation
-import matplotlib.pyplot as plt
-from drawnow import drawnow
-import pandas as pd
-import numpy as np
+#from matplotlib.animation import FuncAnimation
+#import matplotlib.pyplot as plt
+#from drawnow import drawnow
+#import pandas as pd
+#import numpy as np
 import gps
 import sys
 
@@ -38,11 +38,15 @@ def Plotter():
 
 def AcquireData():
     #
+    print('Running data acquisition')
+    #
     session = gps.gps("localhost", "2947")
     #
     session.stream(gps.WATCH_ENABLE | gps.WATCH_NEWSTYLE)
     #
     while True:
+        #
+        print('Running...')
         #
         try:
             report = session.next()
@@ -84,9 +88,11 @@ Time: %s | Latitude: %s | Longitude: %s | Elevation: %s | Velocity: %s
 
 def main():
     #
-    plt.ion() ; figure = plt.figure()
+    #plt.ion() ; figure = plt.figure()
     #
-    drawnow(Plotter)
+    #drawnow(Plotter)
+    #
+    AcquireData()
 
 if(__name__ == '__main__'):
     #

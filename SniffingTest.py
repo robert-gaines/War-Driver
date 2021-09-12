@@ -52,17 +52,22 @@ def Parser(pkt):
                     essid = 'Unknown'
                 else:
                     essid = str(pkt.info,'utf-8')
-                gps_fix = GetGeoFix(port,rate)
+                #gps_fix = GetGeoFix(port,rate)
                 if(gps_fix != None and pkt.addr2 not in bssid_list):
-                    bssid_list.append(pkt.addr2)
-                    access_points.append([essid,pkt.addr2,gps_fix])
+                    stats = pkt[Dot11Beacon].network_stats
+                    crypto = stats.get("crypto")
+                    print(crypto)
+                    print("NEW AP")
+                    #bssid_list.append(pkt.addr2)
+                    #access_points.append([essid,pkt.addr2,gps_fix])
     
     except Exception as e:
         time.sleep(1)
         os.system('cls')
         pass
     finally:
-        DisplayAccessPoints(access_points)
+        return
+        #DisplayAccessPoints(access_points)
 
 def DisplayAccessPoints(ap_list):
     latitude_dir = ''

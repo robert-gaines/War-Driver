@@ -14,7 +14,7 @@ bssid_list    = []
 # For the serial connection
 # to the GPS Antenna
 
-port = 'COM5'
+port = 'COM4'
 rate = 4800
 
 n = datetime.now()

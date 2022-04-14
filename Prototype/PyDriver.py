@@ -2,7 +2,6 @@
 
 from concurrent.futures import thread
 
-
 try:
     from scapy.arch.windows import get_windows_if_list
     import serial.tools.list_ports
@@ -34,7 +33,17 @@ class Worker(QObject):
         self.baud_rate         = baud_rate
         self.bssid_list        = []
         self.new_ap_entry      = []
-        
+        self.log_file   = self.GenerateFileName()
+        self.log_obj    = open(self.log_file,'w')
+        self.log_obj.write('ESSID,BSSID,LATITUDE DIRECTION,LATITUDE,LONGITUDE DIRECTION,LONGITUDE,ALTITUDE,ALTITUDE UNIT,GPS FIX QUALITY\n')
+
+    def GenerateFileName(self):    
+        n  = datetime.now()
+        t  = n.strftime("%m:%d:%Y - %H:%M:%S")
+        ts = n.strftime("%m_%d_%Y_%H_%M_%S")
+        log_file = "Session_"+ts+'.csv'
+        return log_file
+
     def Parser(self,pkt):
         try:
             if(pkt.haslayer(Dot11)):
@@ -47,6 +56,8 @@ class Worker(QObject):
                         essid = str(pkt.info,'utf-8')
                     if(pkt.addr2 not in self.bssid_list):
                         ap_geo_fix = self.GetGeoFix(self.gps_com_port,self.baud_rate)
+                        if((essid == '') or ('NULL' in essid )):
+                            essid = 'Unknown'
                         latitude   = str(ap_geo_fix['lat_direction'])+' '+str(ap_geo_fix['latitude'])
                         longitude  = str(ap_geo_fix['lon_direction'])+' '+str(ap_geo_fix['longitude'])
                         altitude   = str(ap_geo_fix['height'])+' '+str(ap_geo_fix['height_unit'])
@@ -54,6 +65,8 @@ class Worker(QObject):
                         bssid      = pkt.addr2
                         self.bssid_list.append(bssid)
                         self.new_ap_entry = [essid,bssid,latitude,longitude,altitude,fix_qual]
+                        log_entry = "%s,%s,%s,%s,%s,%s,%s,%s,%s\n" % (essid,bssid,str(ap_geo_fix['lat_direction']),latitude,str(ap_geo_fix['lon_direction']),longitude,altitude,str(ap_geo_fix['height_unit']),fix_qual)
+                        self.log_obj.write(log_entry)
                         self.located_access_point.emit(self.new_ap_entry)
         except:
             pass
@@ -107,7 +120,8 @@ class Worker(QObject):
         self.finished.emit()
 
     def TerminateSession(self):
-        self.SessionValid = False 
+        self.SessionValid = False
+        self.log_obj.close() 
 
 class Window(QWidget):
 
@@ -129,7 +143,7 @@ class Window(QWidget):
         QLabel.__init__(self)
         #
         self.setWindowTitle('Python War Driver')
-        self.setGeometry(350,200,1200,500)
+        self.setGeometry(350,200,1000,800)
         #
         #self.setStyleSheet("background-color: darkgray; border: 2px black solid")
         #

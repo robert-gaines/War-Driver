@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+_AUTH_ = 'RWG' # 04142022
+
 from concurrent.futures import thread
 
 try:
@@ -9,13 +11,9 @@ try:
     from PyQt5.QtCore import *
     from PyQt5.QtGui import *
     from scapy.all import *
-    import subprocess
-    import xlsxwriter
     import pynmea2
     import time
-    import csv
     import sys
-    import os
 except Exception as e:
     sys.exit(1)
 
@@ -33,27 +31,94 @@ class Worker(QObject):
         self.baud_rate         = baud_rate
         self.bssid_list        = []
         self.new_ap_entry      = []
-        self.log_file   = self.GenerateFileName()
-        self.log_obj    = open(self.log_file,'w')
-        self.log_obj.write('ESSID,BSSID,LATITUDE DIRECTION,LATITUDE,LONGITUDE DIRECTION,LONGITUDE,ALTITUDE,ALTITUDE UNIT,GPS FIX QUALITY\n')
+        self.log_file          = self.GenerateFileName()
+        self.log_obj           = open(self.log_file,'w')
+        self.log_obj.write('ESSID,BSSID,STANDARD,CIPHER SUITE,AKM,CHANNEL,LATITUDE DIRECTION,LATITUDE,LONGITUDE DIRECTION,LONGITUDE,ALTITUDE,ALTITUDE UNIT,GPS FIX QUALITY\n')
 
     def GenerateFileName(self):    
-        n  = datetime.now()
-        t  = n.strftime("%m:%d:%Y - %H:%M:%S")
-        ts = n.strftime("%m_%d_%Y_%H_%M_%S")
+        n        = datetime.now()
+        t        = n.strftime("%m:%d:%Y - %H:%M:%S")
+        ts       = n.strftime("%m_%d_%Y_%H_%M_%S")
         log_file = "Session_"+ts+'.csv'
         return log_file
 
+    def GetRSNData(self,index):
+        cipher_suites = [
+                        'Group Cipher Suite',
+                        'WEP-140',
+                        'TKIP',
+                        'OCB',
+                        'CCMP-128',
+                        'WEP-104',
+                        'BIP-CMAC-128',
+                        'Unkown',
+                        'GCMP-128',
+                        'GCMP-256',
+                        'CCMP-256',
+                        'BIP-GMAC-128',
+                        'BIP-GMAC-256',
+                        'BIP-CMAC-256'
+                        ]
+        return str(cipher_suites[index])
+
+    def GetAKMData(self,index):
+        akm_suites    = [
+                        'Reserved',
+                        '802.1X',
+                        'PSK',
+                        'FT-802.1X',
+                        'FT-PSK',
+                        'WPA-SHA256',
+                        'PSK-SHA256',
+                        'TDLS',
+                        'SAE',
+                        'FT-SAE',
+                        'AP-PEER-KEY',
+                        'WPA-SHA256-SUITE-B',
+                        'WPA-SHA384-SUITE-B',
+                        'FT-802.1X-SHA384',
+                        'FILS-SHA256',
+                        'FILS-SHA384',
+                        'FT-FILS-SHA256',
+                        'FT-FILS-SHA384',
+                        'OWE'
+                        ]
+        return str(akm_suites[index])
+
     def Parser(self,pkt):
+        wp_standard  = ''
+        cipher_suite = 'Unknown'
+        channel      = 'Undefined'
+        akm          = 'Unknown'
         try:
             if(pkt.haslayer(Dot11)):
-                if(pkt.type== 0 and pkt.subtype == 8):
+                if(pkt.type == 0 and pkt.subtype == 8):
+                    stats           = pkt[Dot11Beacon].network_stats()
+                    wp_standard_raw = list(stats['crypto'])
+                    if(len(wp_standard_raw) > 1):
+                        for entry in wp_standard_raw:
+                            wp_standard += entry
+                            wp_standard += ','
+                        wp_standard = wp_standard.rstrip(',')
+                    else:
+                        wp_standard = wp_standard_raw[0]
+                    channel         = str(stats['channel']) 
                     if(pkt.info == b''):
                         essid = 'Unknown'
                     elif(len(pkt.info.hex()) > 48):
                         essid = 'Unknown'
                     else:
                         essid = str(pkt.info,'utf-8')
+                    if(pkt.haslayer(RSNCipherSuite)):
+                        cipher          = pkt.getlayer(RSNCipherSuite)
+                        cipher_index    = cipher.fields['cipher']
+                        cipher_suite    = self.GetRSNData(cipher_index)
+                        cipher_suite    = str(cipher_suite)
+                    if(pkt.haslayer(AKMSuite)):
+                        akm_raw   = pkt.getlayer(AKMSuite)
+                        akm_index = akm_raw.fields['suite']
+                        akm       = self.GetAKMData(akm_index)
+                        akm       = str(akm)
                     if(pkt.addr2 not in self.bssid_list):
                         ap_geo_fix = self.GetGeoFix(self.gps_com_port,self.baud_rate)
                         if((essid == '') or ('NULL' in essid )):
@@ -64,8 +129,8 @@ class Worker(QObject):
                         fix_qual   = str(ap_geo_fix['quality'])
                         bssid      = pkt.addr2
                         self.bssid_list.append(bssid)
-                        self.new_ap_entry = [essid,bssid,latitude,longitude,altitude,fix_qual]
-                        log_entry = "%s,%s,%s,%s,%s,%s,%s,%s,%s\n" % (essid,bssid,str(ap_geo_fix['lat_direction']),latitude,str(ap_geo_fix['lon_direction']),longitude,altitude,str(ap_geo_fix['height_unit']),fix_qual)
+                        self.new_ap_entry = [essid,bssid,wp_standard,cipher_suite,akm,channel,latitude,longitude,altitude,fix_qual]
+                        log_entry = "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n" % (essid,bssid,wp_standard,cipher_suite,akm,channel,str(ap_geo_fix['lat_direction']),str(ap_geo_fix['latitude']),str(ap_geo_fix['lon_direction']),str(ap_geo_fix['longitude']),str(ap_geo_fix['height']),str(ap_geo_fix['height_unit']),fix_qual)
                         self.log_obj.write(log_entry)
                         self.located_access_point.emit(self.new_ap_entry)
         except:
@@ -76,9 +141,9 @@ class Worker(QObject):
     def GetGeoFix(self,port,rate):
         gps_fix = {}
         try:
-            serial_instance = serial.Serial()
+            serial_instance          = serial.Serial()
             serial_instance.baudrate = rate
-            serial_instance.port = port
+            serial_instance.port     = port
             serial_instance.open()
             fix_data = serial_instance.readline().decode('ascii',errors='replace')
             fix_data = fix_data.strip()
@@ -143,53 +208,105 @@ class Window(QWidget):
         QLabel.__init__(self)
         #
         self.setWindowTitle('Python War Driver')
-        self.setGeometry(350,200,1000,800)
+        self.setGeometry(350,200,1600,800)
         #
-        #self.setStyleSheet("background-color: darkgray; border: 2px black solid")
+        self.setStyleSheet("""background-color: #403e3e; 
+                              border: 2px black solid ; 
+                              color: #0bba11; 
+                              font-size: 16px;
+                              font-style: bold; 
+                              font-family: Arial""")
         #
         self.com_port_label           = QLabel("COM Port for the GPS Antenna")
         self.com_port_combo_box       = QComboBox()
         self.com_ports                = self.ListPorts()
         for port in self.com_ports:
             self.com_port_combo_box.addItem(str(port))
+        self.com_port_combo_box.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 2px; font-style: bold; font-size: 16px; font-family: Arial")
         self.baud_rate_label          = QLabel("Baud Rate for the Serial Connection")
-        self.baud_rate                = QLineEdit()
+        self.baud_rate                = QComboBox()
+        self.baud_rates               = [
+                                            '75',
+                                            '110',
+                                            '134.5',
+                                            '150',
+                                            '300',
+                                            '600',
+                                            '1200',
+                                            '1800',
+                                            '2400',
+                                            '4800',
+                                            '7200',
+                                            '9600',
+                                            '14400',
+                                            '19200',
+                                            '38400',
+                                            '56000',
+                                            '76800',
+                                            '56000',
+                                            '57000',
+                                            '76800',
+                                            '115200',
+                                            '230400',
+                                            '250000',
+                                            '256000'
+                                        ]
+        for rate in self.baud_rates:
+            self.baud_rate.addItem(rate)
+        self.baud_rate.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 2px; font-style: bold; font-size: 16px; font-family: Arial")
         #
         self.mon_int_label            = QLabel("Monitoring Wireless Interface")
         self.mon_int_combo_box        = QComboBox()
         self.net_ifaces               = self.GetInterfaces()
         for interface in self.net_ifaces:
             self.mon_int_combo_box.addItem(interface['name'])
+        self.mon_int_combo_box.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 2px; font-style: bold; font-size: 16px; font-family: Arial")
         #
         self.start_button = QPushButton("Start Session",self)
         self.stop_button  = QPushButton("Stop Session", self)
         self.conf_button  = QPushButton("Set Parameters",self)
         self.reset_button = QPushButton("Reset Session", self)
+        self.start_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
+        self.stop_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
+        self.conf_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
+        self.reset_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
         #
         self.current_latitude_label    = QLabel("Current Latitude")
-        self.current_latitude          = QLineEdit() 
+        self.current_latitude          = QLineEdit()
+        self.current_latitude.setFixedWidth(500)
+        self.current_latitude.setStyleSheet("background-color: black; border:2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial") 
         self.current_longitude_label   = QLabel("Current Longitude")
         self.current_longitude         = QLineEdit()
+        self.current_longitude.setFixedWidth(500)
+        self.current_longitude.setStyleSheet("background-color: black; border:2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial") 
         self.current_elevation_label   = QLabel("Elevation")
         self.current_elevation         = QLineEdit()
+        self.current_elevation.setFixedWidth(500)
+        self.current_elevation.setStyleSheet("background-color: black; border:2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
         self.current_fix_quality_label = QLabel("GPS Fix Quality")
         self.current_fix_quality       = QLineEdit()
+        self.current_fix_quality.setFixedWidth(500)
+        self.current_fix_quality.setStyleSheet("background-color: black; border:2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
         #
         self.tableWidgetLabel = QLabel("Identified Wireless Access Points")
         self.tableWidget      = QTableWidget()
-        #self.tableWidget.setGeometry(100,100,100,100)
+        self.tableWidget.setStyleSheet("background-color: black; color: #0bba11; border: 2px groove #218024; border-radius: 2px; font-style: bold; font-size: 16px; font-family: Arial")
         self.tableWidget.verticalHeader().setVisible(False)
         self.tableWidget.horizontalHeader().setVisible(False)
         self.tableWidget.horizontalHeader().setStretchLastSection(True)
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tableWidget.setColumnCount(6)
+        self.tableWidget.setColumnCount(10)
         self.tableWidget.setRowCount(1)
         self.tableWidget.setItem(0,0,QTableWidgetItem("ESSID"))
         self.tableWidget.setItem(0,1,QTableWidgetItem("BSSID"))
-        self.tableWidget.setItem(0,2,QTableWidgetItem("LATITUDE"))
-        self.tableWidget.setItem(0,3,QTableWidgetItem("LONGITUDE"))
-        self.tableWidget.setItem(0,4,QTableWidgetItem("ELEVATION"))
-        self.tableWidget.setItem(0,5,QTableWidgetItem("GPS FIX QUALITY"))
+        self.tableWidget.setItem(0,2,QTableWidgetItem("STANDARD"))
+        self.tableWidget.setItem(0,3,QTableWidgetItem("CIPHER SUITE"))
+        self.tableWidget.setItem(0,4,QTableWidgetItem("AUTH KEY MGMT"))
+        self.tableWidget.setItem(0,5,QTableWidgetItem("CHANNEL"))
+        self.tableWidget.setItem(0,6,QTableWidgetItem("LATITUDE"))
+        self.tableWidget.setItem(0,7,QTableWidgetItem("LONGITUDE"))
+        self.tableWidget.setItem(0,8,QTableWidgetItem("ELEVATION"))
+        self.tableWidget.setItem(0,9,QTableWidgetItem("GPS FIX QUALITY"))
         #
         main_layout               = QFormLayout()
         self.com_config_container = QVBoxLayout()
@@ -237,24 +354,24 @@ class Window(QWidget):
         #
         gps_com_port  = self.com_port_combo_box.currentText() 
         gps_com_port  = gps_com_port.split('-')[0] 
-        ant_baud_rate = self.baud_rate.text() 
+        ant_baud_rate = self.baud_rate.currentText()
         ws_mon_int    = self.mon_int_combo_box.currentText()
         #
         self.thread          = QThread(parent=self)
         self.MainWorker      = Worker(gps_com_port,ant_baud_rate,ws_mon_int)
         self.terminate_session.connect(self.MainWorker.TerminateSession)   
         self.MainWorker.moveToThread(self.thread)
-
+        #
         self.MainWorker.rx_gps_fix.connect(lambda: self.SetPresentPosition(self.MainWorker.current_gps_fix))
         self.MainWorker.located_access_point.connect(lambda: self.AddAccessPointTableEntry(self.MainWorker.new_ap_entry))
-
+        #
         self.MainWorker.finished.connect(self.thread.quit) 
         self.MainWorker.finished.connect(self.thread.deleteLater)  
         self.thread.finished.connect(self.thread.deleteLater)  
-
+        #
         self.thread.started.connect(self.MainWorker.RunSession)
         self.thread.finished.connect(self.MainWorker.TerminateSession)
-
+        #
         self.start_button.clicked.connect(self.thread.start)
         self.stop_button.clicked.connect(self.StopSession)
         self.reset_button.clicked.connect(self.ResetSession)
@@ -276,43 +393,62 @@ class Window(QWidget):
         self.current_fix_quality.setText(fix_quality)
 
     def AddAccessPointTableEntry(self,ap_entry):
-        essid = ap_entry[0]
-        bssid = ap_entry[1]
-        latitude = ap_entry[2]
-        longitude = ap_entry[3]
-        elevation = ap_entry[4]
-        fix_quality = ap_entry[5]
+        essid       = str(ap_entry[0])
+        bssid       = str(ap_entry[1])
+        wp_standard = str(ap_entry[2])
+        cipher_ste  = str(ap_entry[3])
+        akm         = str(ap_entry[4])
+        channel     = str(ap_entry[5])
+        latitude    = str(ap_entry[6])
+        longitude   = str(ap_entry[7])
+        elevation   = str(ap_entry[8])
+        fix_quality = str(ap_entry[9])
         current_row = self.tableWidget.rowCount()
         self.tableWidget.setRowCount(current_row+1)
         col_index   = 0
         cell_value  = QTableWidgetItem(essid)
-        #cell_value.setForeground(QBrush(QColor(0, 255, 0)))
+        cell_value.setForeground(QBrush(QColor('#218024')))
         self.tableWidget.setItem(current_row,col_index,cell_value) 
         col_index   = 1
         cell_value  = QTableWidgetItem(bssid)
-        #cell_value.setForeground(QBrush(QColor(0, 255, 0)))
+        cell_value.setForeground(QBrush(QColor('#218024')))
         self.tableWidget.setItem(current_row,col_index,cell_value)
         col_index   = 2
-        cell_value  = QTableWidgetItem(latitude)
-        #cell_value.setForeground(QBrush(QColor(0, 255, 0)))
+        cell_value  = QTableWidgetItem(wp_standard)
+        cell_value.setForeground(QBrush(QColor('#218024')))
         self.tableWidget.setItem(current_row,col_index,cell_value)
         col_index   = 3
-        cell_value  = QTableWidgetItem(longitude)
-        #cell_value.setForeground(QBrush(QColor(0, 255, 0)))
+        cell_value  = QTableWidgetItem(cipher_ste)
+        cell_value.setForeground(QBrush(QColor('#218024')))
         self.tableWidget.setItem(current_row,col_index,cell_value)
         col_index   = 4
-        cell_value  = QTableWidgetItem(elevation)
-        #cell_value.setForeground(QBrush(QColor(0, 255, 0)))
+        cell_value  = QTableWidgetItem(akm)
+        cell_value.setForeground(QBrush(QColor('#218024')))
         self.tableWidget.setItem(current_row,col_index,cell_value)
         col_index   = 5
+        cell_value  = QTableWidgetItem(channel)
+        cell_value.setForeground(QBrush(QColor('#218024')))
+        self.tableWidget.setItem(current_row,col_index,cell_value)
+        col_index   = 6
+        cell_value  = QTableWidgetItem(latitude)
+        cell_value.setForeground(QBrush(QColor('#218024')))
+        self.tableWidget.setItem(current_row,col_index,cell_value)
+        col_index   = 7
+        cell_value  = QTableWidgetItem(longitude)
+        cell_value.setForeground(QBrush(QColor('#218024')))
+        self.tableWidget.setItem(current_row,col_index,cell_value)
+        col_index   = 8
+        cell_value  = QTableWidgetItem(elevation)
+        cell_value.setForeground(QBrush(QColor('#218024')))
+        self.tableWidget.setItem(current_row,col_index,cell_value)
+        col_index   = 9
         cell_value  = QTableWidgetItem(fix_quality)
-        #cell_value.setForeground(QBrush(QColor(0, 255, 0)))
+        cell_value.setForeground(QBrush(QColor('#218024')))
         self.tableWidget.setItem(current_row,col_index,cell_value)
         self.tableWidget.update()
         return
 
     def ResetSession(self):
-        self.baud_rate.setText('')
         self.current_latitude.setText('')
         self.current_longitude.setText('')
         self.current_elevation.setText('')

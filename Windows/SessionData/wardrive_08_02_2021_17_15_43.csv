@@ -1,0 +1,13 @@
+ESSID,BSSID,LATITUDE DIRECTION,LATITUDE,LONGITUDE DIRECTION,LONGITUDE,ALTITUDE,ALTITUDE UNIT,GPS FIX QUALITY
+icafe-crocodile         ,6c:71:0d:ea:df:a0,N,47.6857,W,-117.2342,612.5 ,M,1  
+Hogflylives             ,cc:2d:21:57:f9:b9,N,47.6857,W,-117.2342,612.5 ,M,1  
+CenturyLink4917         ,02:6a:e3:65:a3:f1,N,47.6861,W,-117.2356,614.0 ,M,1  
+Unknown                 ,e0:23:ff:87:07:51,N,47.6868,W,-117.2295,605.6 ,M,2  
+CascadeDefense-Guest    ,e0:23:ff:87:07:53,N,47.6865,W,-117.2294,605.5 ,M,2  
+CascadeDefense-Devices  ,e0:23:ff:87:07:52,N,47.6862,W,-117.2299,606.5 ,M,2  
+XFSETUP-E55E            ,a8:70:5d:42:e5:60,N,47.6774,W,-117.238,608.3 ,M,2  
+HRG_Guest               ,f2:cb:bc:34:19:85,N,47.6775,W,-117.2243,611.8 ,M,1  
+HQ Conference Room      ,ee:cb:bc:34:19:85,N,47.6768,W,-117.2244,613.9 ,M,2  
+HRG_Breakroom           ,fa:cb:bc:34:19:85,N,47.6758,W,-117.2197,609.6 ,M,2  
+CBCI-3042-2.4           ,d4:5d:df:cd:7e:b8,N,47.6711,W,-117.1971,611.5 ,M,1  
+PT-2G                   ,80:2a:a8:9a:3d:3e,N,47.6425,W,-117.1964,619.9 ,M,1  

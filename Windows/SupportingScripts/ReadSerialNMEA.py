@@ -17,9 +17,9 @@ def GetGeoFix(port,rate):
         if('GP' in fix_data):
             parsed_fix = pynmea2.parse(fix_data)
             latitude   = parsed_fix.latitude
-            latitude   = round(latitude,2)
+            latitude   = round(latitude,4)
             longitude  = parsed_fix.longitude
-            longitude  = round(longitude,2)
+            longitude  = round(longitude,4)
             lat_dir    = parsed_fix.lat_dir
             lon_dir    = parsed_fix.lon_dir
             altitude   = parsed_fix.altitude
@@ -47,7 +47,7 @@ def GetGeoFix(port,rate):
 
 def main():
     #
-    port = 'COM4'
+    port = 'COM6'
     #
     rate = 4800
     #

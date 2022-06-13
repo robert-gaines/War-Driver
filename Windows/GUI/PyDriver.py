@@ -12,6 +12,7 @@ try:
     from PyQt5.QtGui import *
     from scapy.all import *
     import pynmea2
+    import folium
     import time
     import sys
 except Exception as e:
@@ -31,16 +32,200 @@ class Worker(QObject):
         self.baud_rate         = baud_rate
         self.bssid_list        = []
         self.new_ap_entry      = []
-        self.log_file          = self.GenerateFileName()
+        self.session_list      = []
+        self.route_list        = []
+        self.log_file          = self.GenerateAPFileName()
         self.log_obj           = open(self.log_file,'w')
         self.log_obj.write('ESSID,BSSID,STANDARD,CIPHER SUITE,AKM,CHANNEL,LATITUDE DIRECTION,LATITUDE,LONGITUDE DIRECTION,LONGITUDE,ALTITUDE,ALTITUDE UNIT,GPS FIX QUALITY\n')
+        self.rte_file          = self.GenerateRouteFileName()
+        self.rte_obj           = open(self.rte_file,'w')
+        self.rte_obj.write('TIME,LATITUDE,LONGITUDE,ELEVATION,ELEVATION UNIT,GPS FIX QUALITY\n')
 
-    def GenerateFileName(self):    
+    def GenerateAPFileName(self):    
         n        = datetime.now()
         t        = n.strftime("%m:%d:%Y - %H:%M:%S")
         ts       = n.strftime("%m_%d_%Y_%H_%M_%S")
         log_file = "Session_"+ts+'.csv'
         return log_file
+
+    def GenerateRouteFileName(self):    
+        n        = datetime.now()
+        t        = n.strftime("%m:%d:%Y - %H:%M:%S")
+        ts       = n.strftime("%m_%d_%Y_%H_%M_%S")
+        rte_file = "Route_"+ts+'.csv'
+        return rte_file
+
+    def GenerateAPMapFileName(self):    
+        n            = datetime.now()
+        t           = n.strftime("%m:%d:%Y - %H:%M:%S")
+        ts          = n.strftime("%m_%d_%Y_%H_%M_%S")
+        ap_map_file = "AP_MAP_"+ts+'.html'
+        return ap_map_file
+
+    def GenerateRouteMapFileName(self):    
+        n        = datetime.now()
+        t        = n.strftime("%m:%d:%Y - %H:%M:%S")
+        ts       = n.strftime("%m_%d_%Y_%H_%M_%S")
+        log_file = "Route_Map_"+ts+'.html'
+        return log_file
+
+    def GenerateCompositeMapFileName(self):    
+        n        = datetime.now()
+        t        = n.strftime("%m:%d:%Y - %H:%M:%S")
+        ts       = n.strftime("%m_%d_%Y_%H_%M_%S")
+        log_file = "Composite_Map_"+ts+'.html'
+        return log_file
+
+    def GetAPMapBoundaries(self):
+        min_lat = 0
+        min_lon = 0
+        for entry in self.session_list:
+            latitude  = float(entry[6])
+            longitude = float(entry[7])
+            min_lat   = latitude
+            min_lon   = longitude
+            if(latitude < min_lat):
+                min_lat = latitude
+            if(longitude < min_lon):
+                min_lon = longitude
+        min_lat = round(min_lat,2)
+        min_lon = round(min_lon,2)
+        return [min_lat,min_lon]
+
+    def GetRouteMapBoundaries(self):
+        min_lat = 0
+        min_lon = 0
+        for entry in self.route_list:
+            latitude  = float(entry[1])
+            longitude = float(entry[2])
+            min_lat   = latitude
+            min_lon   = longitude
+            if(latitude < min_lat):
+                min_lat = latitude
+            if(longitude < min_lon):
+                min_lon = longitude
+        min_lat = round(min_lat,2)
+        min_lon = round(min_lon,2)
+        return [min_lat,min_lon]
+
+    def PlotAPCoordinates(self):
+        map_limit = self.GetAPMapBoundaries()
+        m = folium.Map(location=map_limit)
+        m.add_child(folium.LatLngPopup())
+        for entry in self.session_list:
+            try:
+                essid     = entry[0]
+                bssid     = entry[1]
+                wp_std    = entry[2]
+                cipher    = entry[3]
+                akm       = entry[4] 
+                channel   = entry[5]
+                latitude  = entry[6]
+                longitude = entry[7]
+                altitude  = entry[8]
+                alt_unit  = entry[9]
+                fix_qual  = entry[10]
+                if_val    = "ESSID:         %s <br>" % essid
+                if_val += "BSSID:           %s <br>" % bssid
+                if_val += "WPA STANDARD:    %s <br>" % wp_std
+                if_val += "CIPHER:          %s <br>" % cipher
+                if_val += "AKM:             %s <br>" % akm 
+                if_val += "CHANNEL:         %s <br>" % channel
+                if_val += "LATITUDE:        %s <br>" % latitude
+                if_val += "LONGITUDE:       %s <br>" % longitude
+                if_val += "ALTITUDE:        %i <br>" % altitude
+                if_val += "ALTITUDE UNIT:   %s <br>" % alt_unit
+                if_val += "GPS FIX QUALITY: %s <br>" % fix_qual 
+                iframe = folium.IFrame(if_val)
+                popup  = folium.Popup(iframe,min_width=300,max_width=300)
+                folium.Marker(location=[float(latitude),float(longitude)],popup=popup,icon=folium.Icon(prefix="fa",icon="wifi",color="darkred")).add_to(m)
+            except:
+                pass
+        map_name = self.GenerateAPMapFileName()
+        m.save(map_name)
+
+    def PlotRouteCoordinates(self):
+        map_limit = self.GetRouteMapBoundaries()
+        m = folium.Map(location=map_limit)
+        m.add_child(folium.LatLngPopup())
+        for entry in self.route_list:
+            try:
+                timestamp = entry[0]
+                latitude  = entry[1]
+                longitude = entry[2]
+                altitude  = entry[3]
+                alt_unit  = entry[4]
+                fix_qual  = entry[5]
+                if_val    = "PRESENT POSITION INDICATOR <br>" 
+                if_val += "TIMESTAMP:       %s <br>" % timestamp
+                if_val += "LATITUDE:        %s <br>" % latitude
+                if_val += "LONGITUDE:       %s <br>" % longitude
+                if_val += "ALTITUDE:        %i <br>" % altitude
+                if_val += "ALTITUDE UNIT:   %s <br>" % alt_unit
+                if_val += "GPS FIX QUALITY: %s <br>" % fix_qual 
+                iframe = folium.IFrame(if_val)
+                popup  = folium.Popup(iframe,min_width=300,max_width=300)
+                folium.Marker(location=[float(latitude),float(longitude)],popup=popup,icon=folium.Icon(prefix="fa",icon="globe",color="black")).add_to(m)
+            except:
+                pass
+        map_name = self.GenerateRouteMapFileName()
+        m.save(map_name)
+
+    def PlotCompositeData(self):
+        map_limit =self.GetRouteMapBoundaries()
+        m = folium.Map(location=map_limit)
+        m.add_child(folium.LatLngPopup())
+        for entry in self.route_list:
+            try:
+                timestamp = entry[0]
+                latitude  = entry[1]
+                longitude = entry[2]
+                altitude  = entry[3]
+                alt_unit  = entry[4]
+                fix_qual  = entry[5]
+                if_val    = "PRESENT POSITION INDICATOR <br>" 
+                if_val += "TIMESTAMP:       %s <br>" % timestamp
+                if_val += "LATITUDE:        %s <br>" % latitude
+                if_val += "LONGITUDE:       %s <br>" % longitude
+                if_val += "ALTITUDE:        %i <br>" % altitude
+                if_val += "ALTITUDE UNIT:   %s <br>" % alt_unit
+                if_val += "GPS FIX QUALITY: %s <br>" % fix_qual 
+                iframe = folium.IFrame(if_val)
+                popup  = folium.Popup(iframe,min_width=300,max_width=300)
+                folium.Marker(location=[float(latitude),float(longitude)],popup=popup,icon=folium.Icon(prefix="fa",icon="globe",color="black")).add_to(m)
+            except:
+                pass
+        for entry in self.session_list:
+            try:
+                essid     = entry[0]
+                bssid     = entry[1]
+                wp_std    = entry[2]
+                cipher    = entry[3]
+                akm       = entry[4] 
+                channel   = entry[5]
+                latitude  = entry[6]
+                longitude = entry[7]
+                altitude  = entry[8]
+                alt_unit  = entry[9]
+                fix_qual  = entry[10]
+                if_val    = "ESSID:         %s <br>" % essid
+                if_val += "BSSID:           %s <br>" % bssid
+                if_val += "WPA STANDARD:    %s <br>" % wp_std
+                if_val += "CIPHER:          %s <br>" % cipher
+                if_val += "AKM:             %s <br>" % akm 
+                if_val += "CHANNEL:         %s <br>" % channel
+                if_val += "LATITUDE:        %s <br>" % latitude
+                if_val += "LONGITUDE:       %s <br>" % longitude
+                if_val += "ALTITUDE:        %i <br>" % altitude
+                if_val += "ALTITUDE UNIT:   %s <br>" % alt_unit
+                if_val += "GPS FIX QUALITY: %s <br>" % fix_qual 
+                iframe = folium.IFrame(if_val)
+                popup  = folium.Popup(iframe,min_width=300,max_width=300)
+                folium.Marker(location=[float(latitude),float(longitude)],popup=popup,icon=folium.Icon(prefix="fa",icon="wifi",color="darkred")).add_to(m)
+            except:
+                pass
+        map_name = self.GenerateCompositeMapFileName()
+        m.save(map_name)
 
     def GetRSNData(self,index):
         cipher_suites = [
@@ -130,6 +315,7 @@ class Worker(QObject):
                         bssid      = pkt.addr2
                         self.bssid_list.append(bssid)
                         self.new_ap_entry = [essid,bssid,wp_standard,cipher_suite,akm,channel,latitude,longitude,altitude,fix_qual]
+                        self.session_list.append([essid,bssid,wp_standard,cipher_suite,akm,channel,ap_geo_fix['latitude'],ap_geo_fix['longitude'],ap_geo_fix['height'],ap_geo_fix['height_unit'],fix_qual])
                         log_entry = "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n" % (essid,bssid,wp_standard,cipher_suite,akm,channel,str(ap_geo_fix['lat_direction']),str(ap_geo_fix['latitude']),str(ap_geo_fix['lon_direction']),str(ap_geo_fix['longitude']),str(ap_geo_fix['height']),str(ap_geo_fix['height_unit']),fix_qual)
                         self.log_obj.write(log_entry)
                         self.located_access_point.emit(self.new_ap_entry)
@@ -150,9 +336,9 @@ class Worker(QObject):
             if('GP' in fix_data):
                 parsed_fix = pynmea2.parse(fix_data)
                 latitude   = parsed_fix.latitude
-                latitude   = round(latitude,2)
+                latitude   = round(latitude,4)
                 longitude  = parsed_fix.longitude
-                longitude  = round(longitude,2)
+                longitude  = round(longitude,4)
                 lat_dir    = parsed_fix.lat_dir
                 lon_dir    = parsed_fix.lon_dir
                 altitude   = parsed_fix.altitude
@@ -178,6 +364,29 @@ class Worker(QObject):
     def RunSession(self):
         while(self.SessionValid):
             self.current_gps_fix = self.GetGeoFix(self.gps_com_port,self.baud_rate)
+            try:
+                latitude    = self.current_gps_fix['latitude']
+                longitude   = self.current_gps_fix['longitude']
+                height      = self.current_gps_fix['height']
+                height_unit = self.current_gps_fix['height_unit']
+                fix_quality = self.current_gps_fix['quality']
+                ts          = time.ctime()
+                pos_entry   = str(ts)
+                pos_entry   += ','
+                pos_entry   += str(latitude)
+                pos_entry   += ','
+                pos_entry   += str(longitude)
+                pos_entry   += ','
+                pos_entry   += str(height)
+                pos_entry   += ','
+                pos_entry   += str(height_unit)
+                pos_entry   += ','
+                pos_entry   += str(fix_quality)
+                pos_entry   += "\n"
+                self.rte_obj.write(pos_entry)
+                self.route_list.append([ts,latitude,longitude,height,height_unit,fix_quality])
+            except Exception as e:
+                pass
             sniff(filter="",store=False,count=64,iface=r'%s'%self.monitor_interface,prn=self.Parser,monitor=True)
             if(self.current_gps_fix):
                 self.rx_gps_fix.emit(self.current_gps_fix)
@@ -187,10 +396,14 @@ class Worker(QObject):
     def TerminateSession(self):
         self.SessionValid = False
         self.log_obj.close() 
+        self.rte_obj.close()
 
 class Window(QWidget):
 
     terminate_session = pyqtSignal()
+    export_ap_data    = pyqtSignal()
+    export_rte_data   = pyqtSignal()
+    export_composite  = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -262,14 +475,20 @@ class Window(QWidget):
             self.mon_int_combo_box.addItem(interface['name'])
         self.mon_int_combo_box.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 2px; font-style: bold; font-size: 16px; font-family: Arial")
         #
-        self.start_button = QPushButton("Start Session",self)
-        self.stop_button  = QPushButton("Stop Session", self)
-        self.conf_button  = QPushButton("Set Parameters",self)
-        self.reset_button = QPushButton("Reset Session", self)
+        self.start_button        = QPushButton("Start Session",self)
+        self.stop_button         = QPushButton("Stop Session", self)
+        self.conf_button         = QPushButton("Set Parameters",self)
+        self.reset_button        = QPushButton("Reset Session", self)
+        self.export_route_button = QPushButton("Export Route Map", self)
+        self.export_ap_button    = QPushButton("Export Access Point Map", self)
+        self.export_cmp_button   = QPushButton("Export Composite Data Map", self)
         self.start_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
         self.stop_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
         self.conf_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
         self.reset_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
+        self.export_route_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
+        self.export_ap_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
+        self.export_cmp_button.setStyleSheet("background-color: black; border: 2px groove #0bba11; border-radius: 10px; font-style: bold; font-size: 16px; font-family: Arial")
         #
         self.current_latitude_label    = QLabel("Current Latitude")
         self.current_latitude          = QLineEdit()
@@ -316,6 +535,7 @@ class Window(QWidget):
         self.position_ctr_sub     = QHBoxLayout()
         self.status_container     = QHBoxLayout()
         self.display_container    = QVBoxLayout()
+        self.export_container     = QHBoxLayout()
         #
         self.com_config_container.addWidget(self.com_port_label)
         self.com_config_container.addWidget(self.com_port_combo_box)
@@ -337,6 +557,9 @@ class Window(QWidget):
         self.position_ctr_sub.addWidget(self.current_fix_quality)
         self.display_container.addWidget(self.tableWidgetLabel)
         self.display_container.addWidget(self.tableWidget)
+        self.export_container.addWidget(self.export_route_button)
+        self.export_container.addWidget(self.export_ap_button)
+        self.export_container.addWidget(self.export_cmp_button)
         main_layout.addRow(self.com_config_container)
         main_layout.addRow(self.int_config_container)
         main_layout.addRow(self.control_container)
@@ -344,6 +567,7 @@ class Window(QWidget):
         main_layout.addRow(self.position_ctr_sub)
         main_layout.addRow(self.status_container)
         main_layout.addRow(self.display_container)
+        main_layout.addRow(self.export_container)
         #
         self.conf_button.clicked.connect(self.InitializeSession)
         self.reset_button.clicked.connect(self.ResetSession)
@@ -359,7 +583,10 @@ class Window(QWidget):
         #
         self.thread          = QThread(parent=self)
         self.MainWorker      = Worker(gps_com_port,ant_baud_rate,ws_mon_int)
-        self.terminate_session.connect(self.MainWorker.TerminateSession)   
+        self.terminate_session.connect(self.MainWorker.TerminateSession)
+        self.export_ap_data.connect(self.MainWorker.PlotAPCoordinates)
+        self.export_rte_data.connect(self.MainWorker.PlotRouteCoordinates)
+        self.export_composite.connect(self.MainWorker.PlotCompositeData)       
         self.MainWorker.moveToThread(self.thread)
         #
         self.MainWorker.rx_gps_fix.connect(lambda: self.SetPresentPosition(self.MainWorker.current_gps_fix))
@@ -375,6 +602,9 @@ class Window(QWidget):
         self.start_button.clicked.connect(self.thread.start)
         self.stop_button.clicked.connect(self.StopSession)
         self.reset_button.clicked.connect(self.ResetSession)
+        self.export_ap_button.clicked.connect(self.PlotAccessPoints)
+        self.export_route_button.clicked.connect(self.PlotRoutePoints)
+        self.export_cmp_button.clicked.connect(self.PlotCompositePoints)
 
     def SetPresentPosition(self,gps_fix):
         latitude_raw  = str(gps_fix['latitude'])
@@ -447,6 +677,15 @@ class Window(QWidget):
         self.tableWidget.setItem(current_row,col_index,cell_value)
         self.tableWidget.update()
         return
+
+    def PlotAccessPoints(self):
+        self.export_ap_data.emit()
+
+    def PlotRoutePoints(self):
+        self.export_rte_data.emit()
+
+    def PlotCompositePoints(self):
+        self.export_composite.emit()
 
     def ResetSession(self):
         self.current_latitude.setText('')
